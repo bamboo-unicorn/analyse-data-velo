@@ -143,6 +143,7 @@ def plot_all_locations( title='Carte des compteurs de la métropole'):
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = Dash(__name__, external_stylesheets=external_stylesheets)
+sever=app.server
 
 # set app layout
 app.layout = html.Div(children=[
