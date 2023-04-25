@@ -156,11 +156,13 @@ def get_fig_jours_plus_moins(chosen):
         values_top10plus=[df_comptage.loc[(df_comptage['Nom du compteur']==c) & (df_comptage['Date et heure de comptage']==d)]['Comptage quotidien'].iloc[0] for d in top10plus]
 
         df_moins=pd.concat([df_moins, 
-                            pd.DataFrame({'Date':list_topmoins,'Passages':values_top10moins, 'Nom':c}).sort_values('Passages', ascending=False)])
+                            pd.DataFrame({'Date':list_topmoins,'Passages':values_top10moins, 'Nom':c})])
         df_plus=pd.concat([df_plus, 
-                           pd.DataFrame({'Date':list_topplus,'Passages':values_top10plus, 'Nom':c}).sort_values('Passages')])
-    fig_top10moins=px.bar(df_moins,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les moins fréquentés', color='Nom')   
-    fig_top10plus=px.bar(df_plus,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les plus fréquentés', color='Nom') 
+                           pd.DataFrame({'Date':list_topplus,'Passages':values_top10plus, 'Nom':c})])
+    df_plus=df_plus.sort_values('Passages')
+    df_moins=df_moins.sort_values('Passages',ascending=False)
+    fig_top10moins=px.bar(df_moins,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les moins fréquentés', color='Nom', barmode='group')   
+    fig_top10plus=px.bar(df_plus,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les plus fréquentés', color='Nom', barmode='group') 
     return fig_top10moins, fig_top10plus
 
  # initialize app
@@ -173,6 +175,7 @@ server=app.server
 app.layout = html.Div(children=[
     html.H1('Analyse des passages quotidiens', style={'textAlign':'center'}),
     html.Br(),
+    dcc.Graph(figure=plot_all_locations()),
     html.Div([dcc.Dropdown(
         options=compteurs,
         value=['Pont Wilson'],
@@ -204,11 +207,11 @@ app.layout = html.Div(children=[
         ])
     )),    
         
+    dcc.Graph(id='bar2'),
     html.Div(
            id='table'
-       ),
-    dcc.Graph(id='bar2'),
-    dcc.Graph(figure=plot_all_locations())
+       )
+    
     
 ])
 
@@ -231,7 +234,8 @@ def update_hist(chosen,periodicite):
     df=df.loc[df['Nom du compteur']==compteur_0]
     
 # Creation des graphiques en barres top10 jours moins fréquentés
-    fig_moins, fig_plus=get_fig_jours_plus_moins(chosen)   
+    fig_moins, fig_plus=get_fig_jours_plus_moins(chosen) 
+    fig_moins.update_layout(showlegend=False)
 
 #tableau à montrer    
     df.drop(['Top_10_jours_plus_frequentes','Top_10_jours_moins_frequentes'], axis=1, inplace=True)
@@ -296,4 +300,4 @@ def update_hist(chosen,periodicite):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)     
+    app.run_server(debug=True)         
