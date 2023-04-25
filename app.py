@@ -138,6 +138,30 @@ def plot_all_locations( title='Carte des compteurs de la métropole'):
     )
     return(fig)
 
+def get_fig_jours_plus_moins(chosen):
+    if type(chosen)!=list:
+        chosen=list(chosen)
+    dff=df_infos_compteurs.copy().reset_index()
+    # Creation des graphiques en barres top10 jours moins fréquentés
+    df_plus=pd.DataFrame(columns=['Dt','Date', 'Passages', 'Nom'])
+    df_moins=pd.DataFrame(columns=['Dt','Date', 'Passages', 'Nom'])
+    for c in chosen:
+        dfff=dff.loc[dff['Nom du compteur']==c]
+        top10moins=dfff['Top_10_jours_moins_frequentes'].values[0]
+        top10plus=dfff['Top_10_jours_plus_frequentes'].values[0]
+
+        list_topmoins=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10moins]
+        values_top10moins=[df_comptage.loc[(df_comptage['Nom du compteur']==c) & (df_comptage['Date et heure de comptage']==d)]['Comptage quotidien'].iloc[0] for d in top10moins]
+        list_topplus=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10plus]
+        values_top10plus=[df_comptage.loc[(df_comptage['Nom du compteur']==c) & (df_comptage['Date et heure de comptage']==d)]['Comptage quotidien'].iloc[0] for d in top10plus]
+
+        df_moins=pd.concat([df_moins, 
+                            pd.DataFrame({'Date':list_topmoins,'Passages':values_top10moins, 'Nom':c}).sort_values('Passages', ascending=False)])
+        df_plus=pd.concat([df_plus, 
+                           pd.DataFrame({'Date':list_topplus,'Passages':values_top10plus, 'Nom':c}).sort_values('Passages')])
+    fig_top10moins=px.bar(df_moins,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les moins fréquentés', color='Nom')   
+    fig_top10plus=px.bar(df_plus,  y='Date', x='Passages', orientation='h', title ='Top 10 des jours les plus fréquentés', color='Nom') 
+    return fig_top10moins, fig_top10plus
 
  # initialize app
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -172,12 +196,10 @@ app.layout = html.Div(children=[
     html.Div(html.Table(
         html.Tr([
             html.Td([
-                html.H3('Top 10 des jours les plus fréquentés'),
-                html.Ol(id='top10plus')
+                dcc.Graph(id='top10plus')
             ]),
             html.Td([
-                html.H3('Top 10 des jours les moins fréquentés'),
-                html.Ol(id='top10moins')
+                dcc.Graph(id='top10moins')
             ])
         ])
     )),    
@@ -194,8 +216,8 @@ app.layout = html.Div(children=[
 @app.callback(
     Output(component_id='bar', component_property='figure'),
     Output('table', 'children' ),
-    Output('top10plus', 'children'),
-    Output('top10moins', 'children'),
+    Output('top10plus', 'figure'),
+    Output('top10moins', 'figure'),
     Output('bar2', 'figure'),
     Input('compteurs_choisis', 'value'),
     Input('periodicite', 'value')
@@ -208,17 +230,16 @@ def update_hist(chosen,periodicite):
     compteur_0=chosen[0]
     df=df.loc[df['Nom du compteur']==compteur_0]
     
-    top10moins=df['Top_10_jours_moins_frequentes'].values[0]
-    top10plus=df['Top_10_jours_plus_frequentes'].values[0]
-    list_topmoins=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10moins]
-    list_topplus=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10plus]
-    
+# Creation des graphiques en barres top10 jours moins fréquentés
+    fig_moins, fig_plus=get_fig_jours_plus_moins(chosen)   
+
+#tableau à montrer    
     df.drop(['Top_10_jours_plus_frequentes','Top_10_jours_moins_frequentes'], axis=1, inplace=True)
     df=df.transpose().reset_index()
     df.columns=['Nom du compteur', compteur_0]
     df=df.tail(-1)
     
-    
+#Graphique principal     
     df_evolution=plot_average_by(chosen[0], dict_period[periodicite])
     df_evolution['Nom']=chosen[0]
     
@@ -249,6 +270,7 @@ def update_hist(chosen,periodicite):
        fig.update_xaxes(labelalias=dict_mois)
        fig.update_xaxes(title_text='Mois')
        
+ #creation de la visualisation par jour de la semaine      
     dff=df_infos_compteurs[df_infos_compteurs['Nom du compteur']==compteur_0][['Moyenne Lun-Ven','Moyenne Samedi','Moyenne Dimanche','Moyenne quotidienne']].transpose().reset_index()
     dff.columns = ['Donnée', 'Passages']
     dff['Nom']=compteur_0
@@ -258,62 +280,8 @@ def update_hist(chosen,periodicite):
         df_temp['Nom']=c
         dff=pd.concat([dff, df_temp])
     
-    
     fig_compteur=px.bar(dff, x='Donnée', y='Passages', color='Nom', barmode='group')    
     
-    return(fig, 
-           dash_table.DataTable(data=df.to_dict('records'),css=[{'selector': 'table', 'rule': 'table-layout: fixed'}],
-    style_cell={
-        'width': '{}%'.format(len(df.columns)),
-        'textOverflow': 'ellipsis',
-        'overflow': 'hidden' }),
-        html.Ol([html.Li(x) for x in list_topplus]),
-        html.Ol([html.Li(x) for x in list_topmoins]),
-        fig_compteur       
-        
-        )
-
-
-'''def update_hist(nom_compteur,periodicite):
-    dict_period={'Evolution de la moyenne quotidienne sur toute la période':'Date et heure de comptage','Evolution de la moyenne quotidienne par jour de la semaine':'Num Jour',  'Evolution de la moyenne quotidienne par mois de l''année':'Num Mois', 'Evolution de la moyenne quotidienne par année': 'Année'}
-    df=df_infos_compteurs.copy()
-    df=df.reset_index()
-    df=df.loc[df['Nom du compteur']==nom_compteur]
-    
-    top10moins=df['Top_10_jours_moins_frequentes'].values[0]
-    top10plus=df['Top_10_jours_plus_frequentes'].values[0]
-    list_topmoins=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10moins]
-    list_topplus=[dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year) for k in top10plus]
-    
-    df.drop(['Top_10_jours_plus_frequentes','Top_10_jours_moins_frequentes'], axis=1, inplace=True)
-    df=df.transpose().reset_index()
-    df.columns=['Nom du compteur', nom_compteur]
-    df=df.tail(-1)
-    
-    df_evolution=plot_average_by(nom_compteur, dict_period[periodicite])
-    
-    fig=px.bar(df_evolution, title="Passage sur "+nom_compteur+" : évolution de la moyenne quotidienne")
-    fig.update_yaxes(title_text='Comptage quotidien moyen')
-
-    
-    if periodicite == 'Evolution de la moyenne quotidienne sur toute la période':
-        df_evolution=df_evolution.reset_index()
-        df_evolution['Date']=df_evolution['Date et heure de comptage'].apply(lambda k: dict_jours[(k.date().weekday())]+' '+str(k.date().day)+' '+dict_mois[(k.date().month)]+' '+str(k.date().year))
-        fig=px.bar(df_evolution, x='Date et heure de comptage', y='Comptage quotidien', hover_name='Date', hover_data={'Comptage quotidien':True,'Date et heure de comptage':False,'Date':False})
-        fig.update_yaxes(title_text='Comptage quotidien')
-
-    if periodicite =='Evolution de la moyenne quotidienne par jour de la semaine':
-        fig.update_xaxes(labelalias=dict_jours)
-        fig.update_xaxes(title_text='Jour')
-
-        
-    if periodicite == 'Evolution de la moyenne quotidienne par mois de l''année':
-       fig.update_xaxes(labelalias=dict_mois)
-       fig.update_xaxes(title_text='Mois')
-       
-    dff=df_infos_compteurs[df_infos_compteurs['Nom du compteur']==nom_compteur][['Moyenne Lun-Ven','Moyenne Samedi','Moyenne Dimanche','Moyenne quotidienne']].transpose().reset_index()
-    dff.columns = ['Donnée', 'Passages']
-    fig_compteur=px.bar(dff, x='Donnée', y='Passages')    
     
     return(fig, 
            dash_table.DataTable(data=df.to_dict('records'),css=[{'selector': 'table', 'rule': 'table-layout: fixed'}],
@@ -321,30 +289,11 @@ def update_hist(chosen,periodicite):
         'width': '{}%'.format(len(df.columns)),
         'textOverflow': 'ellipsis',
         'overflow': 'hidden' }),
-        html.Ol([html.Li(x) for x in list_topplus]),
-        html.Ol([html.Li(x) for x in list_topmoins]),
+        fig_plus,
+        fig_moins,
         fig_compteur       
-        
         )
-'''
+
+
 if __name__ == "__main__":
     app.run_server(debug=True)     
-
-
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
